@@ -17,8 +17,7 @@ FORMAT = "[%(filename)s:%(lineno)s - %(funcName)20s() ] %(message)s"
 logging.basicConfig(level=logging.DEBUG, format=FORMAT)
 
 def mkdir_ifnotexists(directory):
-    if not os.path.exists(directory):
-        os.mkdir(directory)
+    os.makedirs(directory, exist_ok=True)
 
 def extract_mesh(args):
     torch.set_default_dtype(torch.float32)
@@ -26,7 +25,17 @@ def extract_mesh(args):
     # Configuration
     f = open(args.conf)
     conf_text = f.read()
-    conf_text = conf_text.replace('CASE_NAME', args.case)
+    case_input = args.case
+    is_path = os.path.isabs(case_input) or ('/' in case_input) or ('\\' in case_input) or os.path.exists(case_input)
+    if is_path:
+        case_path = case_input
+        case_name = os.path.basename(os.path.normpath(case_input))
+    else:
+        case_name = case_input
+        case_path = os.path.join('.', 'data', 'DTU', case_input)
+    case_path_norm = os.path.normpath(case_path).replace('\\', '/')
+    conf_text = conf_text.replace('CASE_NAME', case_name)
+    conf_text = conf_text.replace('CASE_PATH', case_path_norm)
     f.close()
 
     conf = ConfigFactory.parse_string(conf_text)
@@ -37,7 +46,7 @@ def extract_mesh(args):
     if 'DTU' in conf['dataset.data_dir']:
         _dataset = 'DTU'
     else:
-        assert False, '[ERROR] Not support now.'
+        _dataset = 'CUSTOM'
 
     evals_folder_name = "evals"
     evaldir = os.path.join(base_exp_dir, evals_folder_name)

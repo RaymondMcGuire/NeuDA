@@ -51,18 +51,41 @@ class Dataset:
         camera_dict = np.load(os.path.join(self.data_dir, self.render_cameras_name))
         self.camera_dict = camera_dict
 
-        self.images_lis = sorted(glob(os.path.join(self.data_dir, 'image/*.png')))
+        image_dir = None
+        for candidate in ('image', 'images'):
+            candidate_dir = os.path.join(self.data_dir, candidate)
+            if os.path.isdir(candidate_dir):
+                image_dir = candidate_dir
+                break
+        if image_dir is None:
+            image_dir = os.path.join(self.data_dir, 'image')
+        self.images_lis = sorted(
+            glob(os.path.join(image_dir, '*.png')) +
+            glob(os.path.join(image_dir, '*.jpg')) +
+            glob(os.path.join(image_dir, '*.jpeg'))
+        )
         n_all_images = len(self.images_lis)
         self.images_lis = self.images_lis[::img_step]
 
         self.n_images = len(self.images_lis)
+        if self.n_images == 0:
+            raise ValueError(f"No images found in {image_dir} (png/jpg/jpeg).")
         self.images_np = np.stack([cv.imread(im_name) for im_name in self.images_lis]) / 256.0
-        self.masks_lis = sorted(glob(os.path.join(self.data_dir, 'mask/*.png')))[::img_step]
+        mask_dir = os.path.join(self.data_dir, 'mask')
+        self.masks_lis = sorted(
+            glob(os.path.join(mask_dir, '*.png')) +
+            glob(os.path.join(mask_dir, '*.jpg')) +
+            glob(os.path.join(mask_dir, '*.jpeg'))
+        )[::img_step]
         
         if len(self.masks_lis) == 0:
             self.masks_np = np.stack([np.ones_like(im) for im in self.images_np])
         else:
-            self.masks_np = np.stack([cv.imread(im_name) for im_name in self.masks_lis]) / 256.0
+            masks = [cv.imread(im_name) for im_name in self.masks_lis]
+            if len(masks) > 0:
+                h, w = self.images_np.shape[1], self.images_np.shape[2]
+                masks = [cv.resize(m, (w, h)) if m.shape[:2] != (h, w) else m for m in masks]
+            self.masks_np = np.stack(masks) / 256.0
 
         # world_mat is a projection matrix from world to image
         self.world_mats_np = [camera_dict['world_mat_%d' % (idx)].astype(np.float32) for idx in range(0, n_all_images, img_step)]
@@ -163,25 +186,29 @@ class Dataset:
         """
         Generate random rays at world space from one camera.
         """
+        img_device = self.images.device
+        cam_device = self.intrinsics_all_inv.device
         if precrop_ratio == 1. or precrop_step == 0 or iter_step >= precrop_step:
-            pixels_x = torch.randint(low=0, high=self.W, size=[batch_size])
-            pixels_y = torch.randint(low=0, high=self.H, size=[batch_size])
+            pixels_x = torch.randint(low=0, high=self.W, size=[batch_size], device=img_device)
+            pixels_y = torch.randint(low=0, high=self.H, size=[batch_size], device=img_device)
         else:
             ratio = precrop_ratio * (1. - iter_step / precrop_step) + 1. * (iter_step / precrop_step)
             ratio = (1 - ratio) * 0.5
             start_x, end_x = int(ratio * self.W), int((1 - ratio) * self.W)
             start_y, end_y = int(ratio * self.H), int((1 - ratio) * self.H)
-            pixels_x = torch.randint(low=start_x, high=end_x, size=[batch_size])
-            pixels_y = torch.randint(low=start_y, high=end_y, size=[batch_size])
+            pixels_x = torch.randint(low=start_x, high=end_x, size=[batch_size], device=img_device)
+            pixels_y = torch.randint(low=start_y, high=end_y, size=[batch_size], device=img_device)
 
         if use_valid_bbox:
             start_x, start_y, end_x, end_y = self._sample_rays_from_bbox(img_idx)
-            pixels_x = torch.randint(low=start_x, high=end_x, size=[batch_size])
-            pixels_y = torch.randint(low=start_y, high=end_y, size=[batch_size])
+            pixels_x = torch.randint(low=start_x, high=end_x, size=[batch_size], device=img_device)
+            pixels_y = torch.randint(low=start_y, high=end_y, size=[batch_size], device=img_device)
 
         color = self.images[img_idx][(pixels_y, pixels_x)]    # batch_size, 3
         mask = self.masks[img_idx][(pixels_y, pixels_x)]      # batch_size, 3
-        p = torch.stack([pixels_x, pixels_y, torch.ones_like(pixels_y)], dim=-1).float()  # batch_size, 3
+        pixels_x_gpu = pixels_x.to(cam_device)
+        pixels_y_gpu = pixels_y.to(cam_device)
+        p = torch.stack([pixels_x_gpu, pixels_y_gpu, torch.ones_like(pixels_y_gpu)], dim=-1).float()  # batch_size, 3
         p = torch.matmul(self.intrinsics_all_inv[img_idx, None, :3, :3], p[:, :, None]).squeeze() # batch_size, 3
         rays_v = p / torch.linalg.norm(p, ord=2, dim=-1, keepdim=True)    # batch_size, 3
         rays_v = torch.matmul(self.pose_all[img_idx, None, :3, :3], rays_v[:, :, None]).squeeze()  # batch_size, 3
@@ -195,11 +222,15 @@ class Dataset:
                 start_x, start_y, end_x, end_y = self._sample_rays_from_bbox(img_idx)
             else:
                 start_x, start_y, end_x, end_y = 0, 0, self.W, self.H
-            pixels_x = torch.arange(start=start_x, end=end_x)
-            pixels_y = torch.arange(start=start_y, end=end_y)
+            img_device = self.images.device
+            cam_device = self.intrinsics_all_inv.device
+            pixels_x = torch.arange(start=start_x, end=end_x, device=img_device)
+            pixels_y = torch.arange(start=start_y, end=end_y, device=img_device)
             color = self.images[img_idx][(pixels_y, pixels_x)]    # batch_size, 3
             mask = self.masks[img_idx][(pixels_y, pixels_x)]      # batch_size, 3
-            p = torch.stack([pixels_x, pixels_y, torch.ones_like(pixels_y)], dim=-1).float()  # batch_size, 3
+            pixels_x_gpu = pixels_x.to(cam_device)
+            pixels_y_gpu = pixels_y.to(cam_device)
+            p = torch.stack([pixels_x_gpu, pixels_y_gpu, torch.ones_like(pixels_y_gpu)], dim=-1).float()  # batch_size, 3
             p = torch.matmul(self.intrinsics_all_inv[img_idx, None, :3, :3], p[:, :, None]).squeeze() # batch_size, 3
             rays_v = p / torch.linalg.norm(p, ord=2, dim=-1, keepdim=True)    # batch_size, 3
             rays_v = torch.matmul(self.pose_all[img_idx, None, :3, :3], rays_v[:, :, None]).squeeze()  # batch_size, 3

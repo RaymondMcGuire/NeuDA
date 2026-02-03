@@ -13,45 +13,47 @@ def load_colmap_data(realdir):
 
     list_of_keys = list(camdata.keys())
     cam = camdata[list_of_keys[0]]
-    print( 'Cameras', len(cam))
+    print('Cameras', len(cam))
 
     h, w, f = cam.height, cam.width, cam.params[0]
-    hwf = np.array([h,w,f]).reshape([3,1])
+    hwf = np.array([h, w, f]).reshape([3, 1])
 
     imagesfile = os.path.join(realdir, 'images.bin')
     imdata = read_model.read_images_binary(imagesfile)
 
     w2c_mats = []
-    bottom = np.array([0,0,0,1.]).reshape([1,4])
+    bottom = np.array([0, 0, 0, 1.]).reshape([1, 4])
 
     names = [imdata[k].name for k in imdata]
-    print( 'Images #', len(names))
+    print('Images #', len(names))
     perm = np.argsort(names)
     for k in imdata:
         im = imdata[k]
         R = im.qvec2rotmat()
-        t = im.tvec.reshape([3,1])
+        t = im.tvec.reshape([3, 1])
         m = np.concatenate([np.concatenate([R, t], 1), bottom], 0)
         w2c_mats.append(m)
 
     w2c_mats = np.stack(w2c_mats, 0)
     c2w_mats = np.linalg.inv(w2c_mats)
 
-    poses = c2w_mats[:, :3, :4].transpose([1,2,0])
-    poses = np.concatenate([poses, np.tile(hwf[..., np.newaxis], [1,1,poses.shape[-1]])], 1)
+    poses = c2w_mats[:, :3, :4].transpose([1, 2, 0])
+    poses = np.concatenate(
+        [poses, np.tile(hwf[..., np.newaxis], [1, 1, poses.shape[-1]])], 1)
 
     points3dfile = os.path.join(realdir, 'points3D.bin')
     pts3d = read_model.read_points3d_binary(points3dfile)
 
     # must switch to [-u, r, -t] from [r, -u, t], NOT [r, u, -t]
-    poses = np.concatenate([poses[:, 1:2, :], poses[:, 0:1, :], -poses[:, 2:3, :], poses[:, 3:4, :], poses[:, 4:5, :]], 1)
+    poses = np.concatenate([poses[:, 1:2, :], poses[:, 0:1, :], -
+                           poses[:, 2:3, :], poses[:, 3:4, :], poses[:, 4:5, :]], 1)
 
     return poses, pts3d, perm
 
 
 def preprocess_llff_pose(basedir):
     # load sparse PCD
-    points3dfile = os.path.join(basedir, 'sparse/points3D.bin')
+    points3dfile = os.path.join(basedir, 'sparse/0/points3D.bin')
     pts3d = read_model.read_points3d_binary(points3dfile)
     pts_arr = [pts3d[k].xyz for k in pts3d]
     pts = np.stack(pts_arr, axis=0)
@@ -67,7 +69,8 @@ def preprocess_llff_pose(basedir):
     scale_mat = np.diag([radius, radius, radius, 1.0]).astype(np.float32)
     scale_mat[:3, 3] = center
 
-    poses_hwf = np.load(os.path.join(basedir, 'poses_bounds.npy')) # n_images, 3, 5
+    poses_hwf = np.load(os.path.join(
+        basedir, 'poses_bounds.npy'))  # n_images, 3, 5
     poses_hwf = poses_hwf[:, :15].reshape(-1, 3, 5)
     poses_raw = poses_hwf[:, :, :4]
     hwf = poses_hwf[:, :, 4]
@@ -81,7 +84,7 @@ def preprocess_llff_pose(basedir):
     convert_mat = np.zeros([4, 4], dtype=np.float32)
     convert_mat[0, 1] = 1.0
     convert_mat[1, 0] = 1.0
-    convert_mat[2, 2] =-1.0
+    convert_mat[2, 2] = -1.0
     convert_mat[3, 3] = 1.0
 
     for i in range(n_images):

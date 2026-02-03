@@ -26,7 +26,17 @@ class Runner:
         self.conf_path = conf_path
         f = open(self.conf_path)
         conf_text = f.read()
-        conf_text = conf_text.replace('CASE_NAME', case)
+        case_input = case
+        is_path = os.path.isabs(case_input) or ('/' in case_input) or ('\\' in case_input) or os.path.exists(case_input)
+        if is_path:
+            case_path = case_input
+            case_name = os.path.basename(os.path.normpath(case_input))
+        else:
+            case_name = case_input
+            case_path = os.path.join('.', 'data', 'DTU', case_input)
+        case_path_norm = os.path.normpath(case_path).replace('\\', '/')
+        conf_text = conf_text.replace('CASE_NAME', case_name)
+        conf_text = conf_text.replace('CASE_PATH', case_path_norm)
         f.close()
 
         self.conf = ConfigFactory.parse_string(conf_text)
@@ -67,7 +77,9 @@ class Runner:
         self.tv_weight = self.conf.get_float('train.tv_weight', default=0.)
         self.mask_volsdf = self.conf.get_bool('train.mask_volsdf', default=False)
         self.normal_penalty = self.conf.get_bool('train.normal_penalty', default=True)
+        self.normal_orientation = self.conf.get_bool('train.normal_orientation', default=True)
         print(f"[INFO] Training setting -- normal penalty: {self.normal_penalty}")
+        print(f"[INFO] Training setting -- normal orientation: {self.normal_orientation}")
         self.is_continue = is_continue
         self.mode = mode
         self.model_list = []
@@ -182,6 +194,15 @@ class Runner:
                 normal_error = (pred_normal - grad_normal) * weights
                 normal_penalty = F.l1_loss(normal_error, torch.zeros_like(normal_error), reduction='sum')
                 loss += normal_penalty * 3e-5
+            
+            # normal_orientation
+            if self.normal_orientation:
+                rays_d_unit = F.normalize(rays_d, dim=-1)
+                n_samples = grad_normal.shape[0] // rays_d_unit.shape[0]
+                rays_d_unit = rays_d_unit.repeat_interleave(n_samples, dim=0)
+                ndot = (grad_normal * rays_d_unit).sum(dim=-1, keepdim=True)
+                normal_orientation = (weights * F.relu(ndot) ** 2).sum()
+                loss += normal_orientation * 3e-5
 
             if self.lipschitz_reg_weight > 0.:
                 c = torch.ones_like(color_fine_loss)
@@ -488,7 +509,8 @@ class Runner:
 if __name__ == '__main__':
     print('Hello Wooden')
 
-    torch.set_default_tensor_type('torch.cuda.FloatTensor')
+    torch.set_default_dtype(torch.float32)
+    torch.set_default_device('cuda')
 
     FORMAT = "[%(filename)s:%(lineno)s - %(funcName)20s() ] %(message)s"
     logging.basicConfig(level=logging.DEBUG, format=FORMAT)

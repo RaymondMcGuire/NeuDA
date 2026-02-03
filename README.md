@@ -71,25 +71,33 @@ Here the `cameras_sphere.npz` follows the data format in [IDR](https://github.co
 
 ## Run
 
-* Training and evaluation with mask
+* Training and evaluation with mask (pass dataset folder path)
 ```shell
 $ ./traineval.sh $case_name $conf $gpu_id
 ```
-For examples, `./traineval.sh dtu_scan24 ./confs/neuda_wmask.conf 1`
+For examples, `./traineval.sh ./data/DTU/dtu_scan24 ./confs/neuda_wmask.conf 1`
+Windows:
+```bat
+traineval.bat .\data\DTU\dtu_scan24 .\confs\neuda_wmask.conf 1
+```
 
-* Training and evaluation without mask
+* Training and evaluation without mask (pass dataset folder path)
 ```shell
 $ ./traineval.sh $case_name $conf $gpu_id
 ```
-For examples, `./traineval.sh dtu_scan24 ./confs/neuda_womask.conf 1`
+For examples, `./traineval.sh ./data/DTU/dtu_scan24 ./confs/neuda_womask.conf 1`
+Windows:
+```bat
+traineval.bat .\data\DTU\dtu_scan24 .\confs\neuda_womask.conf 1
+```
 
 The corresponding log can be found in `exp/<case_name>/<exp_name>/`.
 
-* Evaluation with [pretrained models](https://drive.google.com/file/d/1dQWsKbSs4BhLUWB1BxrOWORJzoLAcYwh).
+* Evaluation with [pretrained models](https://drive.google.com/file/d/1dQWsKbSs4BhLUWB1BxrOWORJzoLAcYwh). (pass dataset folder path)
 ```shell
 $ python extract_mesh.py --case $case --conf $conf --eval_metric
 ```
-For examples, `python extract_mesh.py --case dtu_scan24 --conf ./confs/neuda_womask.conf --eval_metric`
+For examples, `python extract_mesh.py --case ./data/DTU/dtu_scan24 --conf ./confs/neuda_womask.conf --eval_metric`
 
 
 * **[Optional]** Given the reconstructed surface by NeuDA, training with adversarial texture optimization:

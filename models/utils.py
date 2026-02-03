@@ -1,5 +1,10 @@
 import os
-os.environ["PYOPENGL_PLATFORM"] = "egl"
+import sys
+if "PYOPENGL_PLATFORM" not in os.environ:
+    if sys.platform.startswith("win"):
+        os.environ["PYOPENGL_PLATFORM"] = "win32"
+    else:
+        os.environ["PYOPENGL_PLATFORM"] = "egl"
 import numpy as np
 import matplotlib.pyplot as plt
 import cv2
