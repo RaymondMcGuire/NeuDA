@@ -2,7 +2,7 @@
 setlocal
 
 rem TODO: Update these to your dataset and config paths.
-set "case_path=F:\dataset\TetGS\example-man"
+set "case_path=F:\dataset\TetGS\TetGs-author"
 set "conf_path=.\confs\neuda_wmask.conf"
 set "gpu_id=0"
 

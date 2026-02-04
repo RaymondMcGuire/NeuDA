@@ -2,12 +2,12 @@
 setlocal
 
 rem TODO: Update these paths to your dataset.
-set "case_path=F:\dataset\TetGS\example-man"
+set "case_path=D:\GS-project\PaddleSeg\output"
 
 rem Optional: override these if your structure is different.
-rem set "image_dir=F:\dataset\TetGS\example-man\images"
-rem set "sparse_dir=F:\dataset\TetGS\example-man\sparse\0"
-rem set "mask_dir=F:\dataset\TetGS\example-man\mask"
+rem set "image_dir=D:\GS-project\PaddleSeg\output\images"
+rem set "sparse_dir=D:\GS-project\PaddleSeg\output\sparse\0"
+rem set "mask_dir=D:\GS-project\PaddleSeg\output\mask"
 
 rem Actions
 set "do_delete=--delete"

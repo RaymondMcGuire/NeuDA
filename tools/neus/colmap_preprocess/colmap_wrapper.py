@@ -1,6 +1,8 @@
 import os
 import subprocess
 
+COLMAP_BIN = os.environ.get("COLMAP_BIN", "D:/soft/colmap-x64-windows-cuda/COLMAP.bat")
+
 
 
 # $ DATASET_PATH=/path/to/dataset
@@ -21,12 +23,17 @@ import subprocess
 
 # $ mkdir $DATASET_PATH/dense
 def run_colmap(basedir, match_type):
+    if not os.path.exists(COLMAP_BIN):
+        raise FileNotFoundError(
+            f"COLMAP_BIN not found: {COLMAP_BIN}. "
+            "Set environment variable COLMAP_BIN to your COLMAP.bat path."
+        )
     
     logfile_name = os.path.join(basedir, 'colmap_output.txt')
     logfile = open(logfile_name, 'w')
     
     feature_extractor_args = [
-        'colmap', 'feature_extractor', 
+        COLMAP_BIN, 'feature_extractor',
             '--database_path', os.path.join(basedir, 'database.db'), 
             '--image_path', os.path.join(basedir, 'images'),
             '--ImageReader.single_camera', '1',
@@ -37,7 +44,7 @@ def run_colmap(basedir, match_type):
     print('Features extracted')
 
     exhaustive_matcher_args = [
-        'colmap', match_type, 
+        COLMAP_BIN, match_type,
             '--database_path', os.path.join(basedir, 'database.db'), 
     ]
 
@@ -58,7 +65,7 @@ def run_colmap(basedir, match_type):
     #         '--Mapper.init_min_tri_angle', '4',
     # ]
     mapper_args = [
-        'colmap', 'mapper',
+        COLMAP_BIN, 'mapper',
             '--database_path', os.path.join(basedir, 'database.db'),
             '--image_path', os.path.join(basedir, 'images'),
             '--output_path', os.path.join(basedir, 'sparse'), # --export_path changed to --output_path in colmap 3.6
